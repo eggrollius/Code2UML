@@ -8,7 +8,9 @@
 
 #define FILE_NAME "test.h"
 
-struct UMLClass class;
+struct UMLClass** classes = NULL;
+int numClasses = 0;
+
 
 int checkError(enum CXErrorCode code)
 {
@@ -55,11 +57,20 @@ enum CXChildVisitResult visitor(CXCursor cursor, CXCursor parent, CXClientData d
     enum CXCursorKind kind = clang_getCursorKind(cursor);
     CXString spelling = clang_getCursorSpelling(cursor);
 
-    if(kind == CXCursor_ClassDecl && clang_isCursorDefinition(cursor)) {
+    if (kind == CXCursor_ClassDecl && clang_isCursorDefinition(cursor)) {
         const char* tmp = clang_getCString(spelling);
-        class.name = strdup(tmp);
+    
+        // Allocate new class
+        struct UMLClass* newClass = malloc(sizeof(struct UMLClass));
+        newClass->name = strdup(tmp);
+        // You can add fields/methods list here later
         printf("Assigning class name: %s\n", tmp);
+    
+        // Resize and store in array
+        classes = realloc(classes, sizeof(struct UMLClass*) * (numClasses + 1));
+        classes[numClasses++] = newClass;
     }
+    
 
     clang_disposeString(spelling);
 
@@ -96,12 +107,19 @@ int main()
     CXCursor root = clang_getTranslationUnitCursor(tu);
     clang_visitChildren(root, visitor, NULL);
 
-    printf("Class Name: %s\n", class.name);
-
-    if(drawio_output(&class)) {
-        puts("Problem when outputting");
+    for (int i = 0; i < numClasses; ++i) {
+        printf("Class[%d]: %s\n", i, classes[i]->name);
     }
 
-    free(class.name);
+    if (drawio_classesToFile(classes, numClasses, "out.drawio")) {
+        puts("Problem when outputting");
+    }
+    
+    for (int i = 0; i < numClasses; ++i) {
+        free(classes[i]->name);
+        free(classes[i]);
+    }
+    free(classes);
+    
     return 0;
 }
