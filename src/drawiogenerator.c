@@ -125,52 +125,62 @@ int drawio_classToXML(struct UMLClass* class, mxml_node_t* parent)
     mxmlElementSetAttr(geo, "height", "86");
     mxmlElementSetAttr(geo, "as", "geometry");
 
-    // Example field
-    mxml_node_t* field = mxmlNewElement(parent, "mxCell");
-    char fieldId[64];
-    snprintf(fieldId, sizeof(fieldId), "%s-field1", classId);   
-    mxmlElementSetAttr(field, "id", fieldId);
-    mxmlElementSetAttr(field, "value", "+ field: type");
-    mxmlElementSetAttr(field, "style", "text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;");
-    mxmlElementSetAttr(field, "vertex", "1");
-    mxmlElementSetAttr(field, "parent", classId);
+    // Add attributes
+    for (int i = 0; i < class->attributeCount; ++i) {
+        struct UMLAttribute* attribute = &class->attributes[i];
+        mxml_node_t* field = mxmlNewElement(parent, "mxCell");
+        char fieldId[64];
+        snprintf(fieldId, sizeof(fieldId), "%s-field%d", classId, i + 1);
+        mxmlElementSetAttr(field, "id", fieldId);
+        char fieldValue[256];
+        snprintf(fieldValue, sizeof(fieldValue), "%s %s: %s", attribute->accessModifier, attribute->name, attribute->type);
+        mxmlElementSetAttr(field, "value", fieldValue);
+        mxmlElementSetAttr(field, "style", "text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;");
+        mxmlElementSetAttr(field, "vertex", "1");
+        mxmlElementSetAttr(field, "parent", classId);
 
-    mxml_node_t* fieldGeo = mxmlNewElement(field, "mxGeometry");
-    mxmlElementSetAttr(fieldGeo, "y", "26");
-    mxmlElementSetAttr(fieldGeo, "width", "160");
-    mxmlElementSetAttr(fieldGeo, "height", "26");
-    mxmlElementSetAttr(fieldGeo, "as", "geometry");
+        mxml_node_t* fieldGeo = mxmlNewElement(field, "mxGeometry");
+        mxmlElementSetAttr(fieldGeo, "y", "26");
+        mxmlElementSetAttr(fieldGeo, "width", "160");
+        mxmlElementSetAttr(fieldGeo, "height", "26");
+        mxmlElementSetAttr(fieldGeo, "as", "geometry");
+    }
 
-    // Divider line
+    // Add divider between attributes and methods
     mxml_node_t* divider = mxmlNewElement(parent, "mxCell");
-    char lineId[64];
-    snprintf(lineId, sizeof(lineId), "%s-line", classId);
-    mxmlElementSetAttr(divider, "id", lineId);
+    char dividerId[64];
+    snprintf(dividerId, sizeof(dividerId), "%s-divider", classId);
+    mxmlElementSetAttr(divider, "id", dividerId);
     mxmlElementSetAttr(divider, "style", "line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;");
     mxmlElementSetAttr(divider, "vertex", "1");
     mxmlElementSetAttr(divider, "parent", classId);
 
-    mxml_node_t* lineGeo = mxmlNewElement(divider, "mxGeometry");
-    mxmlElementSetAttr(lineGeo, "y", "52");
-    mxmlElementSetAttr(lineGeo, "width", "160");
-    mxmlElementSetAttr(lineGeo, "height", "8");
-    mxmlElementSetAttr(lineGeo, "as", "geometry");
+    mxml_node_t* dividerGeo = mxmlNewElement(divider, "mxGeometry");
+    mxmlElementSetAttr(dividerGeo, "y", "52");
+    mxmlElementSetAttr(dividerGeo, "width", "160");
+    mxmlElementSetAttr(dividerGeo, "height", "8");
+    mxmlElementSetAttr(dividerGeo, "as", "geometry");
 
-    // Example method
-    mxml_node_t* method = mxmlNewElement(parent, "mxCell");
-    char methodId[64];
-    snprintf(methodId, sizeof(methodId), "%s-method1", classId);
-    mxmlElementSetAttr(method, "id", methodId);
-    mxmlElementSetAttr(method, "value", "+ method(type): type");
-    mxmlElementSetAttr(method, "style", "text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;");
-    mxmlElementSetAttr(method, "vertex", "1");
-    mxmlElementSetAttr(method, "parent", classId);
+    // Add methods
+    for (int i = 0; i < class->methodCount; ++i) {
+        struct UMLMethod* method = &class->methods[i];
+        mxml_node_t* methodNode = mxmlNewElement(parent, "mxCell");
+        char methodId[64];
+        snprintf(methodId, sizeof(methodId), "%s-method%d", classId, i + 1);
+        mxmlElementSetAttr(methodNode, "id", methodId);
+        char methodValue[256];
+        snprintf(methodValue, sizeof(methodValue), "%s %s(%s): %s", method->accessModifier, method->name, "...params...", method->returnType);
+        mxmlElementSetAttr(methodNode, "value", methodValue);
+        mxmlElementSetAttr(methodNode, "style", "text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;");
+        mxmlElementSetAttr(methodNode, "vertex", "1");
+        mxmlElementSetAttr(methodNode, "parent", classId);
 
-    mxml_node_t* methodGeo = mxmlNewElement(method, "mxGeometry");
-    mxmlElementSetAttr(methodGeo, "y", "60");
-    mxmlElementSetAttr(methodGeo, "width", "160");
-    mxmlElementSetAttr(methodGeo, "height", "26");
-    mxmlElementSetAttr(methodGeo, "as", "geometry");
+        mxml_node_t* methodGeo = mxmlNewElement(methodNode, "mxGeometry");
+        mxmlElementSetAttr(methodGeo, "y", "60");
+        mxmlElementSetAttr(methodGeo, "width", "160");
+        mxmlElementSetAttr(methodGeo, "height", "26");
+        mxmlElementSetAttr(methodGeo, "as", "geometry");
+    }
 
     free(classId);
 

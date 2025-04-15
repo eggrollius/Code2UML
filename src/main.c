@@ -70,12 +70,46 @@ enum CXChildVisitResult visitor(CXCursor cursor, CXCursor parent, CXClientData d
         classes = realloc(classes, sizeof(struct UMLClass*) * (numClasses + 1));
         classes[numClasses++] = newClass;
     }
-    
+    else if (kind == CXCursor_FieldDecl) {
+        // Extract attribute details
+        const char* attributeName = clang_getCString(spelling);
+        CXType attributeType = clang_getCursorType(cursor);
+        CXString typeSpelling = clang_getTypeSpelling(attributeType);
+        const char* attributeTypeName = clang_getCString(typeSpelling);
+
+        printf("Attribute: %s, Type: %s\n", attributeName, attributeTypeName);
+
+        clang_disposeString(typeSpelling);
+    }
+    else if (kind == CXCursor_CXXMethod) {
+        // Extract method details
+        const char* methodName = clang_getCString(spelling);
+        CXType returnType = clang_getCursorResultType(cursor);
+        CXString returnTypeSpelling = clang_getTypeSpelling(returnType);
+        const char* returnTypeName = clang_getCString(returnTypeSpelling);
+
+        printf("Method: %s, Return Type: %s\n", methodName, returnTypeName);
+
+        // Extract parameters
+        unsigned int numArgs = clang_Cursor_getNumArguments(cursor);
+        for (unsigned int i = 0; i < numArgs; ++i) {
+            CXCursor paramCursor = clang_Cursor_getArgument(cursor, i);
+            CXString paramName = clang_getCursorSpelling(paramCursor);
+            CXType paramType = clang_getCursorType(paramCursor);
+            CXString paramTypeSpelling = clang_getTypeSpelling(paramType);
+
+            printf("  Param: %s, Type: %s\n", clang_getCString(paramName), clang_getCString(paramTypeSpelling));
+
+            clang_disposeString(paramName);
+            clang_disposeString(paramTypeSpelling);
+        }
+
+        clang_disposeString(returnTypeSpelling);
+    }
 
     clang_disposeString(spelling);
 
     return CXChildVisit_Recurse;
-
 }
 
 int main()
