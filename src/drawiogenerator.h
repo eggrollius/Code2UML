@@ -66,4 +66,58 @@ int drawio_generateHeader(mxml_node_t* out);
  */
 int drawio_classToXML(struct UMLClass* class, mxml_node_t* parent);
 
+/**
+ * @brief Calculates the required width of a UML class block based on its attributes and methods.
+ * 
+ * @param class Pointer to the UMLClass whose width is to be calculated.
+ * @return The calculated width in pixels.
+ */
+unsigned int drawio_calculateWidth(struct UMLClass* class);
+
+/**
+ * @brief Generates the XML for the class cell in the draw.io diagram.
+ * 
+ * @param class Pointer to the UMLClass to generate the cell for.
+ * @param parent Pointer to the parent XML node.
+ * @param classId Unique ID for the class cell.
+ * @param width The width of the class cell in pixels.
+ * @return 0 on success, non-zero on error.
+ */
+int drawio_generateClassCell(struct UMLClass* class, mxml_node_t* parent, char* classId, unsigned int width);
+
+/**
+ * @brief Adds the attributes of a UML class to the draw.io diagram.
+ * 
+ * @param class Pointer to the UMLClass whose attributes are to be added.
+ * @param parent Pointer to the parent XML node.
+ * @param classId Unique ID for the class cell.
+ * @param y Pointer to the current y-coordinate (will be updated).
+ * @param width The width of the attribute cells in pixels.
+ * @return 0 on success, non-zero on error.
+ */
+int drawio_addAttributes(struct UMLClass* class, mxml_node_t* parent, char* classId, unsigned int* y, unsigned int width);
+
+/**
+ * @brief Adds a divider between attributes and methods in the UML class block.
+ * 
+ * @param parent Pointer to the parent XML node.
+ * @param classId Unique ID for the class cell.
+ * @param y Pointer to the current y-coordinate (will be updated).
+ * @param width The width of the divider in pixels.
+ * @return 0 on success, non-zero on error.
+ */
+int drawio_addDivider(mxml_node_t* parent, char* classId, unsigned int* y, unsigned int width);
+
+/**
+ * @brief Adds the methods of a UML class to the draw.io diagram.
+ * 
+ * @param class Pointer to the UMLClass whose methods are to be added.
+ * @param parent Pointer to the parent XML node.
+ * @param classId Unique ID for the class cell.
+ * @param y Pointer to the current y-coordinate (will be updated).
+ * @param width The width of the method cells in pixels.
+ * @return 0 on success, non-zero on error.
+ */
+int drawio_addMethods(struct UMLClass* class, mxml_node_t* parent, char* classId, unsigned int* y, unsigned int width);
+
 #endif // DRAWIO_GENERATOR_H

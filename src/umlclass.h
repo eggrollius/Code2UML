@@ -1,12 +1,26 @@
 #ifndef UMLCLASS_H
 #define UMLCLASS_H
 
+typedef enum {
+    PUBLIC,
+    PRIVATE,
+    PROTECTED
+} AccessModifier;
+
+/**
+ * @brief Converts an AccessModifier enum to its string representation.
+ * 
+ * @param modifier The AccessModifier enum value.
+ * @return A string representing the access modifier.
+ */
+const char* accessModifierToString(AccessModifier modifier);
+
 struct UMLAttribute {
     char* name;          // Attribute name
     char* type;          // Attribute type
     char* defaultValue;  // Default value (if applicable)
     int isStatic;        // 1 if static, 0 otherwise
-    char* accessModifier; // Access modifier (public/private/protected)
+    AccessModifier accessModifier; // Access modifier (public/private/protected)
 };
 
 struct UMLMethod {
@@ -14,8 +28,9 @@ struct UMLMethod {
     char* returnType;    // Return type
     char** paramNames;   // Array of parameter names
     char** paramTypes;   // Array of parameter types
-    int paramCount;      // Number of parameters
-    char* accessModifier; // Access modifier (public/private/protected)
+    unsigned int paramCount;      // Number of parameters
+    AccessModifier accessModifier; // Access modifier (public/private/protected)
+    int isStatic;        // 1 if static, 0 otherwise
 };
 
 struct UMLClass {
