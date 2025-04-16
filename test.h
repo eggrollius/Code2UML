@@ -4,6 +4,9 @@
 
 class Human {
 public:
+    static int population;
+    static int getPopulation() { return population; }
+    
     Human();
     Human(const std::string& name, const int socialInsurance);
     ~Human();

@@ -2,6 +2,15 @@
 #include <stdio.h>
 #include "mxml.h"
 #include "umlclass.h"
+#include <stdlib.h>
+#include <string.h> 
+
+#define MIN_CLASS_WIDTH 160
+#define MIN_CLASS_HEIGHT 26
+#define CELL_HEIGHT 26
+#define DIVIDER_HEIGHT 8
+#define FONT_SIZE 12 
+#define FONT_WIDTH_FACTOR 0.5 // Approximation for Helvetica character width
 
 char* drawio_generateUniqueClassId() {
     char buffer[32];
@@ -103,76 +112,216 @@ int drawio_generateFileNode(mxml_node_t** out) {
     return 0;
 }
 
-int drawio_classToXML(struct UMLClass* class, mxml_node_t* parent)
-{
-    if (!class || !class->name || !parent) return 1;
+unsigned int drawio_calculateWidth(struct UMLClass* class) {
+    unsigned int maxLength = strlen(class->name); // Start with the class name length
 
-    // Generate the unique class Id
-    char* classId = drawio_generateUniqueClassId();
+    // Check attributes
+    for (unsigned int i = 0; i < class->attributeCount; ++i) {
+        struct UMLAttribute* attribute = &class->attributes[i];
+        unsigned int length = strlen(accessModifierToString(attribute->accessModifier)) 
+                            + strlen(attribute->name) + strlen(attribute->type) + 3;
+        if (length > maxLength) {
+            maxLength = length;
+        }
+    }
 
-    // Base class cell
+    // Check methods
+    for (unsigned int i = 0; i < class->methodCount; ++i) {
+        struct UMLMethod* method = &class->methods[i];
+        // Calculate length of method signature without parameters
+        unsigned int length = strlen(accessModifierToString(method->accessModifier)) 
+                            + strlen(method->name) + strlen(method->returnType) + 3; // 3 for " " and ": " 
+        // Add length for parameters
+        for (unsigned int j = 0; j < method->paramCount; ++j) {
+            length += strlen(method->paramNames[j]) + strlen(method->paramTypes[j]) + 4; // 3 for ", " and ": "
+        }
+
+        if (length > maxLength) {
+            maxLength = length;
+        }
+    }
+
+    // Calculate the width in pixels based on font size and width factor
+    unsigned int ret = (unsigned int)(maxLength * FONT_SIZE * FONT_WIDTH_FACTOR);
+    return ret < MIN_CLASS_WIDTH ? MIN_CLASS_WIDTH : ret;
+}
+
+int drawio_generateClassCell(struct UMLClass* class, mxml_node_t* parent, char* classId, unsigned int width) {
+    if (!class || !class->name || !parent || !classId) return 1;
+
     mxml_node_t* classCell = mxmlNewElement(parent, "mxCell");
     mxmlElementSetAttr(classCell, "id", classId);
     mxmlElementSetAttr(classCell, "value", class->name);
-    mxmlElementSetAttr(classCell, "style", "swimlane;fontStyle=1;align=center;verticalAlign=top;childLayparent=stackLayparent;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;");
+    mxmlElementSetAttr(classCell, "style", "swimlane;fontStyle=1;align=center;verticalAlign=top;childLayparent=stackLayparent;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=1;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;");
     mxmlElementSetAttr(classCell, "vertex", "1");
     mxmlElementSetAttr(classCell, "parent", "1");
 
     mxml_node_t* geo = mxmlNewElement(classCell, "mxGeometry");
     mxmlElementSetAttr(geo, "x", "140");
     mxmlElementSetAttr(geo, "y", "70");
-    mxmlElementSetAttr(geo, "width", "160");
-    mxmlElementSetAttr(geo, "height", "86");
+    char widthStr[16];
+    snprintf(widthStr, sizeof(widthStr), "%u", width);
+    mxmlElementSetAttr(geo, "width", widthStr);
+    unsigned int classHeight = 26 + (class->attributeCount + class->methodCount) * CELL_HEIGHT + DIVIDER_HEIGHT;
+    classHeight = classHeight < MIN_CLASS_HEIGHT ? MIN_CLASS_HEIGHT : classHeight;
+    char classHeightStr[64];
+    snprintf(classHeightStr, sizeof(classHeightStr), "%u", classHeight);
+    mxmlElementSetAttr(geo, "height", classHeightStr);
     mxmlElementSetAttr(geo, "as", "geometry");
 
-    // Example field
-    mxml_node_t* field = mxmlNewElement(parent, "mxCell");
-    char fieldId[64];
-    snprintf(fieldId, sizeof(fieldId), "%s-field1", classId);   
-    mxmlElementSetAttr(field, "id", fieldId);
-    mxmlElementSetAttr(field, "value", "+ field: type");
-    mxmlElementSetAttr(field, "style", "text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;");
-    mxmlElementSetAttr(field, "vertex", "1");
-    mxmlElementSetAttr(field, "parent", classId);
+    return 0;
+}
 
-    mxml_node_t* fieldGeo = mxmlNewElement(field, "mxGeometry");
-    mxmlElementSetAttr(fieldGeo, "y", "26");
-    mxmlElementSetAttr(fieldGeo, "width", "160");
-    mxmlElementSetAttr(fieldGeo, "height", "26");
-    mxmlElementSetAttr(fieldGeo, "as", "geometry");
+int drawio_addAttributes(struct UMLClass* class, mxml_node_t* parent, char* classId, unsigned int* y, unsigned int width) {
+    if (!class || !parent || !classId || !y) return 1;
 
-    // Divider line
+    for (unsigned int i = 0; i < class->attributeCount; ++i) {
+        struct UMLAttribute* attribute = &class->attributes[i];
+
+        mxml_node_t* field = mxmlNewElement(parent, "mxCell");
+        char fieldId[64];
+        snprintf(fieldId, sizeof(fieldId), "%s-field%d", classId, i + 1);
+        mxmlElementSetAttr(field, "id", fieldId);
+
+        char fieldValue[256];
+        char beginTextDecorator[16] = "";
+        char endTextDecorator[16] = "";
+        // If static set the underline decorator
+        if (attribute->isStatic) {
+            snprintf(beginTextDecorator, sizeof(beginTextDecorator), "<u>");
+            snprintf(endTextDecorator, sizeof(endTextDecorator), "</u>");
+        }
+        snprintf(fieldValue, sizeof(fieldValue), "%s%s %s: %s%s", 
+                beginTextDecorator, accessModifierToString(attribute->accessModifier), 
+                attribute->name, attribute->type, endTextDecorator);
+
+        mxmlElementSetAttr(field, "value", fieldValue);
+        mxmlElementSetAttr(field, "style", "text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;");
+        mxmlElementSetAttr(field, "vertex", "1");
+        mxmlElementSetAttr(field, "parent", classId);
+
+        mxml_node_t* fieldGeo = mxmlNewElement(field, "mxGeometry");
+        char yStr[16];
+        snprintf(yStr, sizeof(yStr), "%u", *y);
+        mxmlElementSetAttr(fieldGeo, "y", yStr);
+        char widthStr[16];
+        snprintf(widthStr, sizeof(widthStr), "%u", width);
+        mxmlElementSetAttr(fieldGeo, "width", widthStr);
+        mxmlElementSetAttr(fieldGeo, "height", "26");
+        mxmlElementSetAttr(fieldGeo, "as", "geometry");
+
+        *y += CELL_HEIGHT; // Increment y for the next attribute
+    }
+
+    return 0;
+}
+
+int drawio_addDivider(mxml_node_t* parent, char* classId, unsigned int* y, unsigned int width) {
+    if (!parent || !classId || !y) return 1;
+
     mxml_node_t* divider = mxmlNewElement(parent, "mxCell");
-    char lineId[64];
-    snprintf(lineId, sizeof(lineId), "%s-line", classId);
-    mxmlElementSetAttr(divider, "id", lineId);
+    char dividerId[64];
+    snprintf(dividerId, sizeof(dividerId), "%s-divider", classId);
+    mxmlElementSetAttr(divider, "id", dividerId);
     mxmlElementSetAttr(divider, "style", "line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;");
     mxmlElementSetAttr(divider, "vertex", "1");
     mxmlElementSetAttr(divider, "parent", classId);
 
-    mxml_node_t* lineGeo = mxmlNewElement(divider, "mxGeometry");
-    mxmlElementSetAttr(lineGeo, "y", "52");
-    mxmlElementSetAttr(lineGeo, "width", "160");
-    mxmlElementSetAttr(lineGeo, "height", "8");
-    mxmlElementSetAttr(lineGeo, "as", "geometry");
+    mxml_node_t* dividerGeo = mxmlNewElement(divider, "mxGeometry");
 
-    // Example method
-    mxml_node_t* method = mxmlNewElement(parent, "mxCell");
-    char methodId[64];
-    snprintf(methodId, sizeof(methodId), "%s-method1", classId);
-    mxmlElementSetAttr(method, "id", methodId);
-    mxmlElementSetAttr(method, "value", "+ method(type): type");
-    mxmlElementSetAttr(method, "style", "text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;");
-    mxmlElementSetAttr(method, "vertex", "1");
-    mxmlElementSetAttr(method, "parent", classId);
+    char dividerYStr[16];
+    snprintf(dividerYStr, sizeof(dividerYStr), "%u", *y);
+    mxmlElementSetAttr(dividerGeo, "y", dividerYStr);
 
-    mxml_node_t* methodGeo = mxmlNewElement(method, "mxGeometry");
-    mxmlElementSetAttr(methodGeo, "y", "60");
-    mxmlElementSetAttr(methodGeo, "width", "160");
-    mxmlElementSetAttr(methodGeo, "height", "26");
-    mxmlElementSetAttr(methodGeo, "as", "geometry");
+    char dividerWidthStr[16];
+    snprintf(dividerWidthStr, sizeof(dividerWidthStr), "%u", width);
+    mxmlElementSetAttr(dividerGeo, "width", dividerWidthStr);
+
+    mxmlElementSetAttr(dividerGeo, "height", "8");
+    mxmlElementSetAttr(dividerGeo, "as", "geometry");
+    *y += DIVIDER_HEIGHT; // Increment y for the divider
+
+    return 0;
+}
+
+int drawio_addMethods(struct UMLClass* class, mxml_node_t* parent, char* classId, unsigned int* y, unsigned int width) {
+    if (!class || !parent || !classId || !y) return 1;
+
+    for (unsigned int i = 0; i < class->methodCount; ++i) {
+        struct UMLMethod* method = &class->methods[i];
+        mxml_node_t* methodNode = mxmlNewElement(parent, "mxCell");
+        char methodId[64];
+        snprintf(methodId, sizeof(methodId), "%s-method%d", classId, i + 1);
+        mxmlElementSetAttr(methodNode, "id", methodId);
+        char methodValue[256] = "";
+        char methodParams[64] = "";
+        for(int i = 0; i < method->paramCount; ++i) {
+            if (i > 0) {
+                strcat(methodParams, ", ");
+            }
+            strcat(methodParams, method->paramNames[i]);
+            strcat(methodParams, ": ");
+            strcat(methodParams, method->paramTypes[i]);
+        }
+        if (method->paramCount == 0) {
+            methodParams[0] = '\0';
+        }
+
+        // If static set the underline decorator
+        char beginTextDecorator[16] = "";
+        char endTextDecorator[16] = "";
+        if (method->isStatic) {
+            snprintf(beginTextDecorator, sizeof(beginTextDecorator), "<u>");
+            snprintf(endTextDecorator, sizeof(endTextDecorator), "</u>");
+        }
+
+        snprintf(methodValue, sizeof(methodValue), "%s%s %s(%s): %s%s", 
+                beginTextDecorator, accessModifierToString(method->accessModifier), method->name, 
+                methodParams, method->returnType, endTextDecorator);
+                
+        mxmlElementSetAttr(methodNode, "value", methodValue);
+        mxmlElementSetAttr(methodNode, "style", "text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;");
+        mxmlElementSetAttr(methodNode, "vertex", "1");
+        mxmlElementSetAttr(methodNode, "parent", classId);
+
+        mxml_node_t* methodGeo = mxmlNewElement(methodNode, "mxGeometry");
+        char methodYStr[16];
+        snprintf(methodYStr, sizeof(methodYStr), "%u", *y);
+        mxmlElementSetAttr(methodGeo, "y", methodYStr);
+        char widthStr[16];
+        snprintf(widthStr, sizeof(widthStr), "%u", width);
+        mxmlElementSetAttr(methodGeo, "width", widthStr);
+        mxmlElementSetAttr(methodGeo, "height", "26");
+        mxmlElementSetAttr(methodGeo, "as", "geometry");
+
+        *y += CELL_HEIGHT; // Increment y for the next method
+    }
+
+    return 0;
+}
+
+int drawio_classToXML(struct UMLClass* class, mxml_node_t* parent) {
+    if (!class || !class->name || !parent) return 1;
+
+    char* classId = drawio_generateUniqueClassId();
+    if (!classId) return 1;
+
+    unsigned int width = drawio_calculateWidth(class);
+
+    if (drawio_generateClassCell(class, parent, classId, width) != 0) {
+        free(classId);
+        return 1;
+    }
+
+    unsigned int y = CELL_HEIGHT; // Start below the class header
+
+    if (drawio_addAttributes(class, parent, classId, &y, width) != 0 ||
+        drawio_addDivider(parent, classId, &y, width) != 0 ||
+        drawio_addMethods(class, parent, classId, &y, width) != 0) {
+        free(classId);
+        return 1;
+    }
 
     free(classId);
-
     return 0;
 }
