@@ -231,7 +231,10 @@ enum CXChildVisitResult visitor(CXCursor cursor, CXCursor parent, CXClientData d
         handleStaticDataMemberDecleration(cursor, spelling);
     }
     else if (kind == CXCursor_CXXMethod) {
-        handleMethodDeclaration(cursor, spelling);
+        // Process only method declerations, not definitions
+        if (!clang_isCursorDefinition(cursor)) {
+            handleMethodDeclaration(cursor, spelling);
+        }
     }
 
     clang_disposeString(spelling);
