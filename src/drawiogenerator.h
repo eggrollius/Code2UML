@@ -62,9 +62,11 @@ int drawio_generateHeader(mxml_node_t* out);
  * @param class Pointer to the UMLClass to convert into XML format.
  * @param parent Pointer to a mini-xml node, the generated XML nodes will be 
  *               stored as children of this node
+ * @param x The x-coordinate for the class block.
+ * @param y The y-coordinate for the class block.
  * @return int 0 on success, non-zero on error.
  */
-int drawio_classToXML(struct UMLClass* class, mxml_node_t* parent);
+int drawio_classToXML(struct UMLClass* class, mxml_node_t* parent, unsigned int x, unsigned int y);
 
 /**
  * @brief Calculates the required width of a UML class block based on its attributes and methods.
@@ -81,9 +83,11 @@ unsigned int drawio_calculateWidth(struct UMLClass* class);
  * @param parent Pointer to the parent XML node.
  * @param classId Unique ID for the class cell.
  * @param width The width of the class cell in pixels.
+ * @param x The x-coordinate of the class cell.
+ * @param y The y-coordinate of the class cell.
  * @return 0 on success, non-zero on error.
  */
-int drawio_generateClassCell(struct UMLClass* class, mxml_node_t* parent, char* classId, unsigned int width);
+int drawio_generateClassCell(struct UMLClass* class, mxml_node_t* parent, char* classId, unsigned int width, unsigned int x, unsigned int y);
 
 /**
  * @brief Adds the attributes of a UML class to the draw.io diagram.

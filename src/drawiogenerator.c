@@ -18,8 +18,7 @@ char* drawio_generateUniqueClassId() {
     return strdup(buffer);
 }
 
-int drawio_classesToFile(struct UMLClass** classes, unsigned int numClasses, char* filePath)
-{
+int drawio_classesToFile(struct UMLClass** classes, unsigned int numClasses, char* filePath) {
     if (!classes || numClasses == 0 || !filePath) return 1;
 
     // Generate base XML structure
@@ -37,13 +36,20 @@ int drawio_classesToFile(struct UMLClass** classes, unsigned int numClasses, cha
         return 1;
     }
     drawio_generateHeader(root);
+
+    // Positioning variables
+    unsigned int x = 40; // Initial x-coordinate
+    unsigned int y = 60; // Initial y-coordinate
+    unsigned int spacing = 50; // Spacing between class boxes
+
     // Append each UML class as a node to the <root>
     for (unsigned int i = 0; i < numClasses; ++i) {
-        if (drawio_classToXML(classes[i], root) != 0) {
+        if (drawio_classToXML(classes[i], root, x, y) != 0) {
             fprintf(stderr, "Failed to convert UMLClass[%u] to XML\n", i);
             mxmlDelete(xml);
             return 1;
         }
+        x += drawio_calculateWidth(classes[i]) + spacing; // Move to the right for the next class
     }
 
     // Write to file
@@ -146,7 +152,7 @@ unsigned int drawio_calculateWidth(struct UMLClass* class) {
     return ret < MIN_CLASS_WIDTH ? MIN_CLASS_WIDTH : ret;
 }
 
-int drawio_generateClassCell(struct UMLClass* class, mxml_node_t* parent, char* classId, unsigned int width) {
+int drawio_generateClassCell(struct UMLClass* class, mxml_node_t* parent, char* classId, unsigned int width, unsigned int x, unsigned int y) {
     if (!class || !class->name || !parent || !classId) return 1;
 
     mxml_node_t* classCell = mxmlNewElement(parent, "mxCell");
@@ -157,8 +163,12 @@ int drawio_generateClassCell(struct UMLClass* class, mxml_node_t* parent, char* 
     mxmlElementSetAttr(classCell, "parent", "1");
 
     mxml_node_t* geo = mxmlNewElement(classCell, "mxGeometry");
-    mxmlElementSetAttr(geo, "x", "140");
-    mxmlElementSetAttr(geo, "y", "70");
+    char xStr[16];
+    snprintf(xStr, sizeof(xStr), "%u", x);
+    mxmlElementSetAttr(geo, "x", xStr);
+    char yStr[16];
+    snprintf(yStr, sizeof(yStr), "%u", y);
+    mxmlElementSetAttr(geo, "y", yStr);
     char widthStr[16];
     snprintf(widthStr, sizeof(widthStr), "%u", width);
     mxmlElementSetAttr(geo, "width", widthStr);
@@ -300,24 +310,28 @@ int drawio_addMethods(struct UMLClass* class, mxml_node_t* parent, char* classId
     return 0;
 }
 
-int drawio_classToXML(struct UMLClass* class, mxml_node_t* parent) {
-    if (!class || !class->name || !parent) return 1;
+int drawio_classToXML(struct UMLClass* class, mxml_node_t* parent, unsigned int x, unsigned int y) {
+    if (!class || !class->name || !parent)  {
+        return 1;
+    }
 
+    // Generate a unique ID for the class
     char* classId = drawio_generateUniqueClassId();
-    if (!classId) return 1;
-
+    if (!classId){
+        return 1;
+    }
     unsigned int width = drawio_calculateWidth(class);
 
-    if (drawio_generateClassCell(class, parent, classId, width) != 0) {
+    if (drawio_generateClassCell(class, parent, classId, width, x, y) != 0) {
         free(classId);
         return 1;
     }
 
-    unsigned int y = CELL_HEIGHT; // Start below the class header
+    unsigned int currentY = CELL_HEIGHT; // Start below the class header
 
-    if (drawio_addAttributes(class, parent, classId, &y, width) != 0 ||
-        drawio_addDivider(parent, classId, &y, width) != 0 ||
-        drawio_addMethods(class, parent, classId, &y, width) != 0) {
+    if (drawio_addAttributes(class, parent, classId, &currentY, width) != 0 ||
+        drawio_addDivider(parent, classId, &currentY, width) != 0 ||
+        drawio_addMethods(class, parent, classId, &currentY, width) != 0) {
         free(classId);
         return 1;
     }
