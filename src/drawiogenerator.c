@@ -10,7 +10,7 @@
 #define CELL_HEIGHT 26
 #define DIVIDER_HEIGHT 8
 #define FONT_SIZE 12 
-#define FONT_WIDTH_FACTOR 0.5 // Approximation for Helvetica character width
+#define FONT_WIDTH_FACTOR 0.55 // Approximation for Helvetica character width
 
 char* drawio_generateUniqueClassId() {
     char buffer[32];

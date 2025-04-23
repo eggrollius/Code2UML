@@ -5,12 +5,22 @@
 #include <stdlib.h>
 #include "umlclass.h"
 #include "drawiogenerator.h"
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
-#define FILE_NAME "test.h"
+#define INITIAL_PATHS_BUFFER_SIZE 10
+
+char** filePathsBuf = NULL;
+int filePathsBufSize = 0;
+int numFiles = 0;
 
 struct UMLClass** classes = NULL;
 int numClasses = 0;
 
+typedef struct {
+    const char* curFileName; // Current file name being processed
+} VisitorData;
 
 int checkError(enum CXErrorCode code)
 {
@@ -196,10 +206,14 @@ void handleMethodDeclaration(CXCursor cursor, CXString spelling) {
 
 enum CXChildVisitResult visitor(CXCursor cursor, CXCursor parent, CXClientData data)
 {
+    // Access the current file name from clientData
+    VisitorData* visitorData = (VisitorData*)data;
+    const char* curFileName = visitorData->curFileName;
+
     // Check that cursor source file is our current file
     CXString fileNameStr = getFileName(cursor);
     const char* fileName = clang_getCString(fileNameStr);
-    if(strcmp(fileName, FILE_NAME) != 0) {
+    if (strcmp(fileName, curFileName) != 0) {
         clang_disposeString(fileNameStr);
         return CXChildVisit_Continue;
     }
@@ -218,55 +232,168 @@ enum CXChildVisitResult visitor(CXCursor cursor, CXCursor parent, CXClientData d
     }
     else if (kind == CXCursor_CXXMethod) {
         handleMethodDeclaration(cursor, spelling);
-    } 
+    }
 
     clang_disposeString(spelling);
+    clang_disposeString(fileNameStr);
 
     return CXChildVisit_Recurse;
 }
 
-int main()
-{
-    const char* testFile = FILE_NAME;
+/**
+ * @brief Recursively processes a directory to find all files.
+ * 
+ * @param dirPath The path to the directory.
+ */
+void processDirectory(const char* dirPath) {
+    DIR* dir = opendir(dirPath);
+    if (!dir) {
+        perror("opendir");
+        return;
+    }
 
-    CXIndex index = clang_createIndex(0, 0);
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL) {
+        // Skip "." and ".."
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
 
-    const char *args[] = {
-        "-x", "c++",          // treat as C++
-        "-std=c++20",         // c++20
-        "-I.",                // current dir for headers
-    };
+        // Construct the full path
+        char fullPath[PATH_MAX];
+        snprintf(fullPath, sizeof(fullPath), "%s/%s", dirPath, entry->d_name);
 
-    CXTranslationUnit tu;
-    enum CXErrorCode CXRet = clang_parseTranslationUnit2(
-        index,
-        testFile,
-        args, sizeof(args)/sizeof(args[0]),
-        NULL, 0,
-        CXTranslationUnit_None,
-        &tu
-    );
+        struct stat pathStat;
+        if (stat(fullPath, &pathStat) != 0) {
+            perror("stat");
+            continue;
+        }
 
-    if(checkError(CXRet)) {
+        if (S_ISDIR(pathStat.st_mode)) {
+            // Recursively process subdirectories
+            processDirectory(fullPath);
+        } else if (S_ISREG(pathStat.st_mode)) {
+            // Add file to the buffer
+            if (numFiles >= filePathsBufSize) {
+                filePathsBufSize *= 2;
+                filePathsBuf = realloc(filePathsBuf, sizeof(char*) * filePathsBufSize);
+                if (!filePathsBuf) {
+                    perror("realloc");
+                    closedir(dir);
+                    exit(1);
+                }
+            }
+            filePathsBuf[numFiles++] = strdup(fullPath);
+        }
+    }
+
+    closedir(dir);
+}
+
+/**
+ * @brief Processes all files in the filePathsBuf array.
+ */
+void processFiles() {
+    for (int i = 0; i < numFiles; ++i) {
+        const char* filePath = filePathsBuf[i];
+        printf("Processing file: %s\n", filePath);
+
+        CXIndex index = clang_createIndex(0, 0);
+
+        const char* args[] = {
+            "-x", "c++",          // Treat as C++
+            "-std=c++20",         // Use C++20 standard
+            "-I.",                // Include current directory for headers
+        };
+
+        CXTranslationUnit tu;
+        enum CXErrorCode CXRet = clang_parseTranslationUnit2(
+            index,
+            filePath,
+            args, sizeof(args) / sizeof(args[0]),
+            NULL, 0,
+            CXTranslationUnit_None,
+            &tu
+        );
+
+        if (checkError(CXRet)) {
+            clang_disposeIndex(index);
+            continue;
+        }
+
+        CXCursor root = clang_getTranslationUnitCursor(tu);
+
+        // Create VisitorData and set the current file name
+        VisitorData visitorData = { .curFileName = filePath };
+
+        // Pass VisitorData to the visitor function
+        clang_visitChildren(root, visitor, &visitorData);
+
+        clang_disposeTranslationUnit(tu);
+        clang_disposeIndex(index);
+    }
+}
+
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <path> [<path> ...]\n", argv[0]);
         return 1;
     }
 
-    CXCursor root = clang_getTranslationUnitCursor(tu);
-    clang_visitChildren(root, visitor, NULL);
-
-    for (int i = 0; i < numClasses; ++i) {
-        printf("Class[%d]: %s\n", i, classes[i]->name);
+    // Initialize file paths buffer
+    filePathsBufSize = INITIAL_PATHS_BUFFER_SIZE;
+    filePathsBuf = malloc(sizeof(char*) * filePathsBufSize);
+    if (!filePathsBuf) {
+        perror("malloc");
+        return 1;
     }
 
+    // Process each argument
+    for (int i = 1; i < argc; ++i) {
+        struct stat pathStat;
+        if (stat(argv[i], &pathStat) != 0) {
+            perror("stat");
+            continue;
+        }
+
+        if (S_ISREG(pathStat.st_mode)) {
+            // Add file to the buffer
+            if (numFiles >= filePathsBufSize) {
+                filePathsBufSize *= 2;
+                filePathsBuf = realloc(filePathsBuf, sizeof(char*) * filePathsBufSize);
+                if (!filePathsBuf) {
+                    perror("realloc");
+                    exit(1);
+                }
+            }
+            filePathsBuf[numFiles++] = strdup(argv[i]);
+        } else if (S_ISDIR(pathStat.st_mode)) {
+            // Process directory
+            processDirectory(argv[i]);
+        } else {
+            printf("Skipping unsupported path: %s\n", argv[i]);
+        }
+    }
+
+    // Process all collected files
+    processFiles();
+
+    // Output UML classes to a draw.io file
     if (drawio_classesToFile(classes, numClasses, "out.drawio")) {
         puts("Problem when outputting");
     }
-    
+
+    // Free allocated memory
+    for (int i = 0; i < numFiles; ++i) {
+        free(filePathsBuf[i]);
+    }
+    free(filePathsBuf);
+
     for (int i = 0; i < numClasses; ++i) {
         free(classes[i]->name);
         free(classes[i]);
     }
     free(classes);
-    
+
     return 0;
 }
